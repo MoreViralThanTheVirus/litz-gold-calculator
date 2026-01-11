@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
-const cheerio = require('cheerio');
+const puppeteer = require('puppeteer');
 const cron = require('node-cron');
 const path = require('path');
 
@@ -21,16 +20,16 @@ let priceCache = {
 };
 
 const productConfig = [
-    { id: '1g-minted', name: '1 gram', weight: 1, type: 'minted', category: 'Minted Bars' },
-    { id: '5g-minted', name: '5 grams', weight: 5, type: 'minted', category: 'Minted Bars' },
-    { id: '50g-minted', name: '50 grams', weight: 50, type: 'minted', category: 'Minted Bars' },
-    { id: '100g-minted', name: '100 grams', weight: 100, type: 'minted', category: 'Minted Bars' },
-    { id: '5g-lunar', name: '5 grams Lunar Horse', weight: 5, type: 'lunar', category: 'Minted Bars' },
-    { id: '10g-cast', name: '10 grams', weight: 10, type: 'cast', category: 'Cast Bars' },
-    { id: '20g-cast', name: '20 grams', weight: 20, type: 'cast', category: 'Cast Bars' },
-    { id: '50g-cast', name: '50 grams', weight: 50, type: 'cast', category: 'Cast Bars' },
-    { id: '100g-cast', name: '100 grams', weight: 100, type: 'cast', category: 'Cast Bars' },
-    { id: '1oz-lunar', name: '1 Ounce Lunar Horse', weight: 31.1035, type: 'lunar-oz', category: 'Cast Bars' }
+    { id: '1g-minted', weight: 1, type: 'minted', category: 'Minted Bars' },
+    { id: '5g-minted', weight: 5, type: 'minted', category: 'Minted Bars' },
+    { id: '50g-minted', weight: 50, type: 'minted', category: 'Minted Bars' },
+    { id: '100g-minted', weight: 100, type: 'minted', category: 'Minted Bars' },
+    { id: '5g-lunar', weight: 5, type: 'lunar', category: 'Minted Bars' },
+    { id: '10g-cast', weight: 10, type: 'cast', category: 'Cast Bars' },
+    { id: '20g-cast', weight: 20, type: 'cast', category: 'Cast Bars' },
+    { id: '50g-cast', weight: 50, type: 'cast', category: 'Cast Bars' },
+    { id: '100g-cast', weight: 100, type: 'cast', category: 'Cast Bars' },
+    { id: '1oz-lunar', weight: 31.1035, type: 'lunar-oz', category: 'Cast Bars' }
 ];
 
 const premiums = {
@@ -41,27 +40,96 @@ const premiums = {
 };
 
 async function scrapeMKSPamp() {
-    console.log('[' + new Date().toISOString() + '] Starting price scrape...');
+    console.log('[' + new Date().toISOString() + '] Scraping MKS PAMP...');
+    let browser;
+
     try {
-        const response = await axios.get('https://www.mkspamp.com.my/pricing', {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml',
-            },
-            timeout: 15000
+        browser = await puppeteer.launch({
+            headless: 'new',
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process'
+            ]
         });
 
-        const $ = cheerio.load(response.data);
-        let goldPrice = null;
+        const page = await browser.newPage();
 
-        $('[class*="price"], [class*="gold"]').each((i, el) => {
-            const text = $(el).text();
-            const match = text.match(/(\d{3}(?:\.\d{2})?)/);
-            if (match && !goldPrice) {
-                const price = parseFloat(match[1]);
-                if (price > 200 && price < 1000) goldPrice = price;
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        await page.setViewport({ width: 1920, height: 1080 });
+
+        console.log('Navigating to MKS PAMP...');
+        await page.goto('https://www.mkspamp.com.my/pricing', {
+            waitUntil: 'networkidle2',
+            timeout: 60000
+        });
+
+        // Wait for page to fully load
+        await page.waitForSelector('body', { timeout: 30000 });
+
+        // Wait a bit for any JavaScript to execute
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Extract gold price
+        const goldPrice = await page.evaluate(() => {
+            const bodyText = document.body.innerText;
+
+            // Look for gold price patterns - MKS PAMP shows price per gram
+            // Try various patterns
+            const patterns = [
+                /gold.*?sell.*?(\d{3}(?:\.\d{2})?)/i,
+                /sell.*?gold.*?(\d{3}(?:\.\d{2})?)/i,
+                /(\d{3}(?:\.\d{2})?)\s*(?:RM|MYR)?\s*(?:per|\/)\s*(?:gram|g)/i,
+                /gold\s*999.*?(\d{3}(?:\.\d{2})?)/i,
+                /fine\s*gold.*?(\d{3}(?:\.\d{2})?)/i
+            ];
+
+            for (const pattern of patterns) {
+                const match = bodyText.match(pattern);
+                if (match) {
+                    const price = parseFloat(match[1]);
+                    if (price > 200 && price < 1000) {
+                        return price;
+                    }
+                }
             }
+
+            // Try finding in tables
+            const tables = document.querySelectorAll('table');
+            for (const table of tables) {
+                const text = table.innerText.toLowerCase();
+                if (text.includes('gold') || text.includes('sell')) {
+                    const priceMatch = table.innerText.match(/(\d{3}(?:\.\d{2})?)/);
+                    if (priceMatch) {
+                        const price = parseFloat(priceMatch[1]);
+                        if (price > 200 && price < 1000) {
+                            return price;
+                        }
+                    }
+                }
+            }
+
+            // Try finding any 3-digit number that looks like a gold price
+            const allNumbers = bodyText.match(/\b(\d{3}(?:\.\d{2})?)\b/g);
+            if (allNumbers) {
+                for (const num of allNumbers) {
+                    const price = parseFloat(num);
+                    // Gold price per gram is typically 400-800 RM in Malaysia
+                    if (price >= 400 && price <= 800) {
+                        return price;
+                    }
+                }
+            }
+
+            return null;
         });
+
+        await browser.close();
 
         if (goldPrice) {
             priceCache.goldPricePerGram = goldPrice;
@@ -69,14 +137,16 @@ async function scrapeMKSPamp() {
             priceCache.status = 'success';
             priceCache.error = null;
             calculateProductPrices();
-            console.log('Price updated: RM ' + goldPrice);
+            console.log('SUCCESS: Gold price = RM ' + goldPrice);
         } else {
-            throw new Error('Could not extract price');
+            throw new Error('Could not find gold price on page');
         }
+
     } catch (error) {
         console.error('Scrape error:', error.message);
         priceCache.status = 'error';
         priceCache.error = error.message;
+        if (browser) await browser.close();
     }
 }
 
@@ -96,18 +166,6 @@ function calculateProductPrices() {
     });
 }
 
-app.post('/api/update-base-price', (req, res) => {
-    const { basePrice } = req.body;
-    if (!basePrice || isNaN(basePrice)) return res.status(400).json({ error: 'Invalid price' });
-
-    priceCache.goldPricePerGram = parseFloat(basePrice);
-    priceCache.lastUpdated = new Date().toISOString();
-    priceCache.status = 'manual';
-    priceCache.error = null;
-    calculateProductPrices();
-    res.json({ success: true, prices: priceCache });
-});
-
 app.get('/api/prices', (req, res) => res.json(priceCache));
 
 app.post('/api/refresh', async (req, res) => {
@@ -115,13 +173,22 @@ app.post('/api/refresh', async (req, res) => {
     res.json(priceCache);
 });
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', lastUpdated: priceCache.lastUpdated }));
+app.get('/api/health', (req, res) => res.json({
+    status: 'ok',
+    lastUpdated: priceCache.lastUpdated,
+    priceStatus: priceCache.status
+}));
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-cron.schedule('*/5 * * * *', () => scrapeMKSPamp());
+// Auto-refresh every 5 minutes
+cron.schedule('*/5 * * * *', () => {
+    console.log('Scheduled refresh...');
+    scrapeMKSPamp();
+});
 
 app.listen(PORT, async () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
+    console.log('Fetching initial prices from MKS PAMP...');
     await scrapeMKSPamp();
 });

@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LITZ Gold Price Calculator - Live Pricing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a5a7a 0%, #2d8a9e 50%, #1a5a7a 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .header {
+            background: linear-gradient(135deg, #1a5a7a 0%, #2d8a9e 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo { font-size: 2.5rem; font-weight: bold; letter-spacing: 2px; }
+        .logo-sub { font-size: 0.8rem; opacity: 0.9; }
+        .title-section { text-align: center; }
+        .title-section h1 { font-size: 1.5rem; margin-bottom: 5px; }
+        .title-section .date {
+            background: #d4af37;
+            color: #1a1a1a;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .pamp-badge {
+            background: white;
+            color: #1a1a1a;
+            padding: 10px 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .pamp-badge .authorized { font-size: 0.7rem; color: #d4af37; font-weight: bold; }
+        .status-bar {
+            padding: 12px 30px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .status-bar.loading { background: #e3f2fd; color: #1565c0; }
+        .status-bar.success { background: #d4edda; color: #155724; }
+        .status-bar.error { background: #f8d7da; color: #721c24; }
+        .status-bar.manual { background: #fff3cd; color: #856404; }
+        .live-indicator { display: flex; align-items: center; gap: 8px; }
+        .live-dot {
+            width: 10px; height: 10px;
+            background: #4caf50;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        .base-price-display {
+            background: linear-gradient(135deg, #d4af37 0%, #f0d060 100%);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .base-price-info { display: flex; align-items: center; gap: 20px; }
+        .base-price-label { font-size: 0.9rem; color: #333; }
+        .base-price-value { font-size: 2rem; font-weight: bold; color: #1a1a1a; }
+        .base-price-unit { font-size: 0.9rem; color: #555; }
+        .manual-input { display: flex; align-items: center; gap: 10px; }
+        .manual-input input {
+            padding: 10px 15px;
+            border: 2px solid #1a5a7a;
+            border-radius: 8px;
+            font-size: 1rem;
+            width: 150px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-primary { background: #1a5a7a; color: white; }
+        .btn-secondary { background: white; color: #1a5a7a; border: 2px solid #1a5a7a; }
+        .btn-refresh { background: #4caf50; color: white; }
+        .products-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            padding: 20px;
+        }
+        .column { padding: 10px; }
+        .column:first-child { border-right: 2px dashed #e0e0e0; }
+        .column-title { color: #1a5a7a; margin-bottom: 15px; padding-left: 10px; font-size: 1.1rem; }
+        .product-card {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #fafafa;
+            border-radius: 12px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .product-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .product-icon {
+            width: 50px; height: 70px;
+            background: linear-gradient(135deg, #d4af37 0%, #f0d060 50%, #d4af37 100%);
+            border-radius: 5px;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            color: #1a1a1a;
+            font-weight: bold;
+            box-shadow: 0 3px 10px rgba(212, 175, 55, 0.3);
+        }
+        .product-icon.lunar {
+            background: linear-gradient(135deg, #c41e3a 0%, #ff4757 50%, #c41e3a 100%);
+            color: white;
+        }
+        .product-info { flex: 1; }
+        .product-weight { font-size: 1.3rem; color: #1a1a1a; }
+        .product-weight span { font-weight: normal; font-size: 1rem; color: #666; }
+        .product-type { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
+        .product-price { font-size: 1.4rem; font-weight: bold; color: #d4af37; }
+        .footer {
+            background: #1a5a7a;
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .footer-info { display: flex; flex-direction: column; gap: 5px; }
+        .footer-info span { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+        .checkmark { color: #4ade80; font-weight: bold; }
+        .contact-info { text-align: right; }
+        .contact-info a { color: #d4af37; text-decoration: none; }
+        .refresh-info { text-align: center; font-size: 0.8rem; opacity: 0.8; }
+        .countdown { font-weight: bold; }
+        .loading-spinner {
+            display: inline-block; width: 20px; height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1a5a7a;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media (max-width: 768px) {
+            .products-grid { grid-template-columns: 1fr; }
+            .column:first-child { border-right: none; border-bottom: 2px dashed #e0e0e0; }
+            .header { flex-direction: column; gap: 15px; text-align: center; }
+            .base-price-display { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <div class="logo">LiTZ</div>
+                <div class="logo-sub">Johor Bahru City Square</div>
+            </div>
+            <div class="title-section">
+                <h1>Daily Price List</h1>
+                <p style="font-size: 0.75rem; margin-bottom: 8px;">*Live prices from MKS PAMP</p>
+                <div class="date" id="current-date"></div>
+            </div>
+            <div class="pamp-badge">
+                <div style="font-weight: bold; font-size: 1.2rem;">PAMP.</div>
+                <div style="font-size: 0.6rem;">Produits Artistiques Metaux Precieux</div>
+                <div class="authorized">Authorised Retailer</div>
+            </div>
+        </div>
+
+        <div class="status-bar loading" id="status-bar">
+            <div class="live-indicator">
+                <div class="loading-spinner"></div>
+                <span id="status-text">Connecting...</span>
+            </div>
+            <div>
+                <button class="btn btn-refresh" onclick="refreshPrices()">Refresh</button>
+            </div>
+        </div>
+
+        <div class="base-price-display">
+            <div class="base-price-info">
+                <div>
+                    <div class="base-price-label">MKS PAMP Gold Price</div>
+                    <div class="base-price-value" id="base-price-display">RM ---</div>
+                    <div class="base-price-unit">per gram (999.9 Fine Gold)</div>
+                </div>
+            </div>
+            <div class="manual-input">
+                <input type="number" id="manual-price" placeholder="Manual price (RM)">
+                <button class="btn btn-secondary" onclick="setManualPrice()">Set Price</button>
+            </div>
+        </div>
+
+        <div class="products-grid">
+            <div class="column">
+                <h3 class="column-title">Minted Bars</h3>
+                <div id="minted-products"></div>
+            </div>
+            <div class="column">
+                <h3 class="column-title">Cast Bars</h3>
+                <div id="cast-products"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="footer-info">
+                <span><span class="checkmark">OK</span> Nationwide Delivery</span>
+                <span><span class="checkmark">OK</span> Ready Stocks</span>
+                <span><span class="checkmark">OK</span> KL Pickup</span>
+            </div>
+            <div class="refresh-info">
+                <div>Auto-refresh in <span class="countdown" id="countdown">5:00</span></div>
+                <div id="last-updated">Last updated: --</div>
+            </div>
+            <div class="contact-info">
+                <div style="font-size: 0.9rem; margin-bottom: 5px;">WhatsApp</div>
+                <div style="font-size: 1.1rem; font-weight: bold;">+6017-797 8101</div>
+                <div style="margin-top: 5px;"><a href="https://litz.store" target="_blank">litz.store</a></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let countdownSeconds = 300;
+        let countdownInterval;
+
+        function updateDate() {
+            const today = new Date();
+            const options = { day: 'numeric', month: 'long', year: 'numeric' };
+            document.getElementById('current-date').textContent = today.toLocaleDateString('en-GB', options);
+        }
+
+        function formatPrice(price) {
+            if (!price && price !== 0) return 'RM ---';
+            return 'RM ' + Math.round(price).toLocaleString('en-MY');
+        }
+
+        function updateStatus(type, message) {
+            const statusBar = document.getElementById('status-bar');
+            statusBar.className = 'status-bar ' + type;
+            let icon = type === 'loading' ? '<div class="loading-spinner"></div>' :
+                       type === 'success' ? '<div class="live-dot"></div>' : '';
+            document.querySelector('.live-indicator').innerHTML = icon + '<span>' + message + '</span>';
+        }
+
+        function renderProducts(products) {
+            const mintedContainer = document.getElementById('minted-products');
+            const castContainer = document.getElementById('cast-products');
+            mintedContainer.innerHTML = '';
+            castContainer.innerHTML = '';
+
+            products.forEach(product => {
+                const isLunar = product.type.includes('lunar');
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.innerHTML = `
+                    <div class="product-icon ${isLunar ? 'lunar' : ''}">${isLunar ? 'LUNAR' : 'PAMP'}</div>
+                    <div class="product-info">
+                        ${isLunar ? '<div class="product-type">Lunar Horse</div>' : ''}
+                        <div class="product-weight">${product.weight === 31.1035 ? '1' : product.weight} <span>${product.weight === 31.1035 ? 'Ounce' : (product.weight === 1 ? 'gram' : 'grams')}</span></div>
+                        <div class="product-price">${product.priceFormatted || formatPrice(product.price)}</div>
+                    </div>
+                `;
+                if (product.category === 'Minted Bars') {
+                    mintedContainer.appendChild(card);
+                } else {
+                    castContainer.appendChild(card);
+                }
+            });
+        }
+
+        async function fetchPrices() {
+            try {
+                updateStatus('loading', 'Fetching prices...');
+                const response = await fetch(API_BASE + '/api/prices');
+                const data = await response.json();
+
+                if (data.goldPricePerGram) {
+                    document.getElementById('base-price-display').textContent = formatPrice(data.goldPricePerGram);
+                    if (data.products && data.products.length > 0) renderProducts(data.products);
+                    if (data.lastUpdated) {
+                        document.getElementById('last-updated').textContent = 'Updated: ' + new Date(data.lastUpdated).toLocaleTimeString();
+                    }
+                    updateStatus(data.status === 'manual' ? 'manual' : 'success',
+                        data.status === 'manual' ? 'Manual price set' : 'Live from MKS PAMP');
+                } else {
+                    updateStatus('error', 'Enter price manually');
+                    renderDefaultProducts();
+                }
+            } catch (error) {
+                updateStatus('error', 'Connection error');
+                renderDefaultProducts();
+            }
+        }
+
+        function renderDefaultProducts() {
+            const defaultProducts = [
+                { id: '1g-minted', weight: 1, type: 'minted', category: 'Minted Bars', price: null },
+                { id: '5g-minted', weight: 5, type: 'minted', category: 'Minted Bars', price: null },
+                { id: '50g-minted', weight: 50, type: 'minted', category: 'Minted Bars', price: null },
+                { id: '100g-minted', weight: 100, type: 'minted', category: 'Minted Bars', price: null },
+                { id: '5g-lunar', weight: 5, type: 'lunar', category: 'Minted Bars', price: null },
+                { id: '10g-cast', weight: 10, type: 'cast', category: 'Cast Bars', price: null },
+                { id: '20g-cast', weight: 20, type: 'cast', category: 'Cast Bars', price: null },
+                { id: '50g-cast', weight: 50, type: 'cast', category: 'Cast Bars', price: null },
+                { id: '100g-cast', weight: 100, type: 'cast', category: 'Cast Bars', price: null },
+                { id: '1oz-lunar', weight: 31.1035, type: 'lunar-oz', category: 'Cast Bars', price: null }
+            ];
+            renderProducts(defaultProducts);
+        }
+
+        async function refreshPrices() {
+            updateStatus('loading', 'Refreshing...');
+            try {
+                const response = await fetch(API_BASE + '/api/refresh', { method: 'POST' });
+                const data = await response.json();
+                if (data.goldPricePerGram) {
+                    document.getElementById('base-price-display').textContent = formatPrice(data.goldPricePerGram);
+                    if (data.products) renderProducts(data.products);
+                    updateStatus('success', 'Refreshed');
+                }
+            } catch (e) {
+                updateStatus('error', 'Refresh failed');
+            }
+            resetCountdown();
+        }
+
+        async function setManualPrice() {
+            const price = parseFloat(document.getElementById('manual-price').value);
+            if (!price || price <= 0) { alert('Enter a valid price'); return; }
+            try {
+                const response = await fetch(API_BASE + '/api/update-base-price', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ basePrice: price })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('base-price-display').textContent = formatPrice(price);
+                    if (data.prices && data.prices.products) renderProducts(data.prices.products);
+                    updateStatus('manual', 'Price set: RM ' + price);
+                    document.getElementById('manual-price').value = '';
+                }
+            } catch (e) { alert('Error setting price'); }
+        }
+
+        function startCountdown() {
+            countdownInterval = setInterval(() => {
+                countdownSeconds--;
+                const m = Math.floor(countdownSeconds / 60);
+                const s = countdownSeconds % 60;
+                document.getElementById('countdown').textContent = m + ':' + s.toString().padStart(2, '0');
+                if (countdownSeconds <= 0) { resetCountdown(); refreshPrices(); }
+            }, 1000);
+        }
+
+        function resetCountdown() {
+            countdownSeconds = 300;
+            if (countdownInterval) clearInterval(countdownInterval);
+            startCountdown();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDate();
+            fetchPrices();
+            startCountdown();
+        });
+    </script>
+</body>
+</html>
